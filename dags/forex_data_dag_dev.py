@@ -76,7 +76,7 @@ def get_forex_data_for_pair(currency_pair: str):
     """
     today = datetime.date.today()
     start_date = today - datetime.timedelta(days=today.weekday() + 7)
-    end_date = today - datetime.timedelta(days=today.weekday() + 3)
+    end_date = today - datetime.timedelta(days=today.weekday() + 2)
 
     # 1分足データを取得
     return get_forex_data(currency_pair, start_date, end_date, interval='1m')
