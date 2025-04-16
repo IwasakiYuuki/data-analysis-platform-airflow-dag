@@ -56,6 +56,8 @@ def get_stock_data(ticker: str, start_date: datetime.date, end_date: datetime.da
         if not isinstance(data, pd.DataFrame) or data.empty:
             print(f"No data found for {ticker} between {start_date} and {end_date} with interval {interval}")
             return None
+        data = data.droplevel("Ticker", axis=1)
+        data["Ticker"] = ticker
         return data
     except Exception as e:
         print(f"Error fetching data for {ticker}: {e}")

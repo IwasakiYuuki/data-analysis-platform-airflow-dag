@@ -29,7 +29,8 @@ class TestStockDataDagProd(unittest.TestCase):
     @patch('dags.stock_data_dag_prod.yf.download')
     def test_get_stock_data(self, mock_yf_download):
         # モックの設定
-        mock_df = pd.DataFrame({'Close': [100, 101, 102]})
+        mock_df = pd.DataFrame({('Close', '7203.T'): [100, 101, 102]})
+        mock_df.columns.names = ["", "Ticker"]
         mock_yf_download.return_value = mock_df
         start_date = datetime.date(2024, 1, 1)
         end_date = datetime.date(2024, 1, 2)
