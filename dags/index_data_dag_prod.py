@@ -5,7 +5,6 @@ import yfinance as yf
 import time
 import os
 import tempfile
-import concurrent.futures
 import pandas as pd
 from airflow.providers.apache.hdfs.hooks.webhdfs import WebHDFSHook
 
@@ -104,7 +103,7 @@ def get_index_data_for_ticker(ticker: str):
     return get_index_data(ticker, start_date, end_date, interval='1m')
 
 
-def fetch_index_data(tickers: list, max_workers: int = 1) -> list:
+def fetch_index_data(tickers: list) -> list:
     """
     与えられた指標のリストに対して、並列でデータを取得する。
 
@@ -116,20 +115,19 @@ def fetch_index_data(tickers: list, max_workers: int = 1) -> list:
         list: (ticker, data) のタプルのリスト。データ取得に失敗した場合は、tickerとNoneのタプルを返す。
     """
     index_data_results = []
-    with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
-        future_to_ticker = {executor.submit(get_index_data_for_ticker, ticker): ticker for ticker in tickers}
-        for future in concurrent.futures.as_completed(future_to_ticker):
-            ticker = future_to_ticker[future]
-            try:
-                data = future.result()
-                index_data_results.append((ticker, data))
-            except Exception as exc:
-                print(f"{ticker} generated an exception: {exc}")
-                index_data_results.append((ticker, None))  # エラーが発生した場合、Noneをリストに追加
+
+    for ticker in tickers:
+        try:
+            index_data = get_index_data_for_ticker(ticker)
+            index_data_results.append((ticker, index_data))
+        except Exception as exc:
+            print(f"{ticker} generated an exception: {exc}")
+            index_data_results.append((ticker, None))
+
     return index_data_results
 
 
-def get_index_data_from_list(max_workers: int = 1) -> dict:
+def get_index_data_from_list() -> dict:
     """
     経済指標のリストを取得し、データを取得する。
 
@@ -140,7 +138,7 @@ def get_index_data_from_list(max_workers: int = 1) -> dict:
         dict: 経済指標をキー、データを値とする辞書
     """
     tickers = INDEX_TICKERS
-    index_data_results = fetch_index_data(tickers, max_workers)
+    index_data_results = fetch_index_data(tickers)
     index_data = {ticker: data for ticker, data in index_data_results if data is not None}  # Noneのデータを除外
     return index_data
 
@@ -216,8 +214,8 @@ def process_index_data(hdfs_conn_id: str, hdfs_path: str):
 
 with DAG(
     dag_id="index_data_pipeline_prod",
-    schedule="5 9 * * Mon",
-    start_date=datetime.datetime(2025, 4, 21),
+    schedule="45 12 * * Mon",
+    start_date=datetime.datetime(2025, 4, 10),
     catchup=False,
     tags=["index_data", "prod"],
 ) as dag:

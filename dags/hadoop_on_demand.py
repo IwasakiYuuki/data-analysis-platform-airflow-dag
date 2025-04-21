@@ -19,8 +19,8 @@ HADOOP_RUN_DURATION_SEC = 7200  # 2 hours
 
 with DAG(
     dag_id="hadoop_cluster_on_demand_simple",
-    schedule=None,
-    start_date=pendulum.datetime(2023, 1, 1, tz="UTC"),
+    schedule="40 12 * * Mon",
+    start_date=pendulum.datetime(2025, 4, 10),
     catchup=False,
     tags=["hadoop", "lan", "ssh", "simple"],
 ) as dag:

@@ -5,7 +5,6 @@ import yfinance as yf
 import time
 import os
 import tempfile
-import concurrent.futures
 import pandas as pd
 from airflow.providers.apache.hdfs.hooks.webhdfs import WebHDFSHook
 
@@ -82,7 +81,7 @@ def get_stock_data_for_ticker(ticker: str):
     return get_stock_data(ticker, start_date, end_date, interval='1m')
 
 
-def fetch_stock_data(tickers: list, max_workers: int = 3) -> list:
+def fetch_stock_data(tickers: list) -> list:
     """
     与えられた証券コードのリストに対して、並列で株価データを取得する。
 
@@ -94,20 +93,17 @@ def fetch_stock_data(tickers: list, max_workers: int = 3) -> list:
         list: (ticker, data) のタプルのリスト。データ取得に失敗した場合は、tickerとNoneのタプルを返す。
     """
     stock_data_results = []
-    with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
-        future_to_ticker = {executor.submit(get_stock_data_for_ticker, ticker): ticker for ticker in tickers}
-        for future in concurrent.futures.as_completed(future_to_ticker):
-            ticker = future_to_ticker[future]
-            try:
-                data = future.result()
-                stock_data_results.append((ticker, data))
-            except Exception as exc:
-                print(f"{ticker} generated an exception: {exc}")
-                stock_data_results.append((ticker, None))  # エラーが発生した場合、Noneをリストに追加
+    for ticker in tickers:
+        try:
+            stock_data = get_stock_data_for_ticker(ticker)
+            stock_data_results.append((ticker, stock_data))
+        except Exception as exc:
+            print(f"{ticker} generated an exception: {exc}")
+            stock_data_results.append((ticker, None))
     return stock_data_results
 
 
-def get_stock_data_from_list(max_workers: int = 3) -> dict:
+def get_stock_data_from_list() -> dict:
     """
     証券コードのリストを取得し、株価データを取得する。
 
@@ -118,7 +114,7 @@ def get_stock_data_from_list(max_workers: int = 3) -> dict:
         dict: 証券コードをキー、株価データを値とする辞書
     """
     tickers = get_stock_list()  # 証券コードのリストを取得
-    stock_data_results = fetch_stock_data(tickers, max_workers)
+    stock_data_results = fetch_stock_data(tickers)
     stock_data = {ticker: data for ticker, data in stock_data_results if data is not None}  # Noneのデータを除外
     return stock_data
 
@@ -182,8 +178,8 @@ def process_stock_data(hdfs_conn_id: str, hdfs_path: str, market: str = "prime")
 
 with DAG(
     dag_id="stock_data_pipeline_prod",
-    schedule="5 9 * * Mon",
-    start_date=datetime.datetime(2025, 4, 21),
+    schedule="45 12 * * Mon",
+    start_date=datetime.datetime(2025, 4, 10),
     catchup=False,
     tags=["stock_data"],
 ) as dag:

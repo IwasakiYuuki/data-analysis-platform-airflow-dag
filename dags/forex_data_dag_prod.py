@@ -5,7 +5,6 @@ import yfinance as yf
 import time
 import os
 import tempfile
-import concurrent.futures
 import pandas as pd
 from airflow.providers.apache.hdfs.hooks.webhdfs import WebHDFSHook
 
@@ -85,7 +84,7 @@ def get_forex_data_for_pair(currency_pair: str):
     return get_forex_data(currency_pair, start_date, end_date, interval='1m')
 
 
-def fetch_forex_data(currency_pairs: list, max_workers: int = 1) -> list:
+def fetch_forex_data(currency_pairs: list) -> list:
     """
     与えられた通貨ペアのリストに対して、並列で為替データを取得する。
 
@@ -97,20 +96,19 @@ def fetch_forex_data(currency_pairs: list, max_workers: int = 1) -> list:
         list: (currency_pair, data) のタプルのリスト。データ取得に失敗した場合は、currency_pairとNoneのタプルを返す。
     """
     forex_data_results = []
-    with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
-        future_to_pair = {executor.submit(get_forex_data_for_pair, pair): pair for pair in currency_pairs}
-        for future in concurrent.futures.as_completed(future_to_pair):
-            pair = future_to_pair[future]
-            try:
-                data = future.result()
-                forex_data_results.append((pair, data))
-            except Exception as exc:
-                print(f"{pair} generated an exception: {exc}")
-                forex_data_results.append((pair, None))  # エラーが発生した場合、Noneをリストに追加
+
+    for currency_pair in currency_pairs:
+        try:
+            forex_data = get_forex_data_for_pair(currency_pair)
+            forex_data_results.append((currency_pair, forex_data))
+        except Exception as exc:
+            print(f"{currency_pair} generated an exception: {exc}")
+            forex_data_results.append((currency_pair, None))
+
     return forex_data_results
 
 
-def get_forex_data_from_list(max_workers: int = 1) -> dict:
+def get_forex_data_from_list() -> dict:
     """
     通貨ペアのリストを取得し、為替データを取得する。
 
@@ -121,7 +119,7 @@ def get_forex_data_from_list(max_workers: int = 1) -> dict:
         dict: 通貨ペアをキー、為替データを値とする辞書
     """
     currency_pairs = CURRENCY_PAIRS  # 通貨ペアのリストを取得
-    forex_data_results = fetch_forex_data(currency_pairs, max_workers)
+    forex_data_results = fetch_forex_data(currency_pairs)
     forex_data = {pair: data for pair, data in forex_data_results if data is not None}  # Noneのデータを除外
     return forex_data
 
@@ -184,8 +182,8 @@ def process_forex_data(hdfs_conn_id: str, hdfs_path: str):
 
 with DAG(
     dag_id="forex_data_pipeline_prod",
-    schedule="5 9 * * Mon",
-    start_date=datetime.datetime(2025, 4, 21),
+    schedule="45 12 * * Mon",
+    start_date=datetime.datetime(2025, 4, 10),
     catchup=False,
     tags=["forex_data"],
 ) as dag:
