@@ -15,8 +15,7 @@ MACHINES = {
     "machine3": {"mac": "{{ var.value.hadoop_datanode3_mac }}", "ssh_conn_id": "ssh_hadoop-datanode3"},
 }
 
-INITIAL_WAIT_SEC = 60
-HADOOP_RUN_DURATION_SEC = 180
+HADOOP_RUN_DURATION_SEC = 7200  # 2 hours
 
 with DAG(
     dag_id="hadoop_cluster_on_demand_simple",

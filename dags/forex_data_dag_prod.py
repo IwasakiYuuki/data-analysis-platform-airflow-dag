@@ -85,7 +85,7 @@ def get_forex_data_for_pair(currency_pair: str):
     return get_forex_data(currency_pair, start_date, end_date, interval='1m')
 
 
-def fetch_forex_data(currency_pairs: list, max_workers: int = 5) -> list:
+def fetch_forex_data(currency_pairs: list, max_workers: int = 1) -> list:
     """
     与えられた通貨ペアのリストに対して、並列で為替データを取得する。
 
@@ -110,7 +110,7 @@ def fetch_forex_data(currency_pairs: list, max_workers: int = 5) -> list:
     return forex_data_results
 
 
-def get_forex_data_from_list(max_workers: int = 5) -> dict:
+def get_forex_data_from_list(max_workers: int = 1) -> dict:
     """
     通貨ペアのリストを取得し、為替データを取得する。
 
@@ -168,7 +168,7 @@ def process_forex_data(hdfs_conn_id: str, hdfs_path: str):
         tmp_file_path = tmp_file.name
 
         # Load the temporary file to HDFS
-        hdfs_file_name = f"forex_data_{start_date.strftime('%Y%m%d')}_{end_date.strftime('%Y%m%d')}.csv"
+        hdfs_file_name = f"data_{start_date.strftime('%Y%m%d')}_{end_date.strftime('%Y%m%d')}.csv"
         hdfs_file_path = f"{hdfs_path}/{hdfs_file_name}"
         hdfs_hook.load_file(
             source=tmp_file_path,
@@ -184,8 +184,8 @@ def process_forex_data(hdfs_conn_id: str, hdfs_path: str):
 
 with DAG(
     dag_id="forex_data_pipeline_prod",
-    schedule=None,
-    start_date=datetime.datetime(2023, 1, 1),
+    schedule="5 9 * * Mon",
+    start_date=datetime.datetime(2025, 4, 21),
     catchup=False,
     tags=["forex_data"],
 ) as dag:
@@ -194,6 +194,6 @@ with DAG(
         python_callable=process_forex_data,
         op_kwargs={
             "hdfs_conn_id": "webhdfs_default",
-            "hdfs_path": "/tmp/forex_data",
+            "hdfs_path": "/data/lake/yfinance/forex/price/main/minute",
         },
     )

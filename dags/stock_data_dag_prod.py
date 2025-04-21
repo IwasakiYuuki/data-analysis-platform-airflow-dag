@@ -82,7 +82,7 @@ def get_stock_data_for_ticker(ticker: str):
     return get_stock_data(ticker, start_date, end_date, interval='1m')
 
 
-def fetch_stock_data(tickers: list, max_workers: int = 5) -> list:
+def fetch_stock_data(tickers: list, max_workers: int = 3) -> list:
     """
     与えられた証券コードのリストに対して、並列で株価データを取得する。
 
@@ -107,7 +107,7 @@ def fetch_stock_data(tickers: list, max_workers: int = 5) -> list:
     return stock_data_results
 
 
-def get_stock_data_from_list(max_workers: int = 5) -> dict:
+def get_stock_data_from_list(max_workers: int = 3) -> dict:
     """
     証券コードのリストを取得し、株価データを取得する。
 
@@ -166,7 +166,7 @@ def process_stock_data(hdfs_conn_id: str, hdfs_path: str, market: str = "prime")
         tmp_file_path = tmp_file.name
 
         # Load the temporary file to HDFS
-        hdfs_file_name = f"stock_data_{start_date.strftime('%Y%m%d')}_{end_date.strftime('%Y%m%d')}_{market}.csv"
+        hdfs_file_name = f"data_{start_date.strftime('%Y%m%d')}_{end_date.strftime('%Y%m%d')}_{market}.csv"
         hdfs_file_path = f"{hdfs_path}/{hdfs_file_name}"
         hdfs_hook.load_file(
             source=tmp_file_path,
@@ -182,8 +182,8 @@ def process_stock_data(hdfs_conn_id: str, hdfs_path: str, market: str = "prime")
 
 with DAG(
     dag_id="stock_data_pipeline_prod",
-    schedule=None,
-    start_date=datetime.datetime(2023, 1, 1),
+    schedule="5 9 * * Mon",
+    start_date=datetime.datetime(2025, 4, 21),
     catchup=False,
     tags=["stock_data"],
 ) as dag:
@@ -192,7 +192,7 @@ with DAG(
         python_callable=process_stock_data,
         op_kwargs={
             "hdfs_conn_id": "webhdfs_default",
-            "hdfs_path": "/tmp/stock_data",
+            "hdfs_path": "/data/lake/yfinance/stock/price/jp_prime/minute",
             "market": "prime",
         },
     )

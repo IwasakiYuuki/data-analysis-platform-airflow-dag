@@ -104,7 +104,7 @@ def get_index_data_for_ticker(ticker: str):
     return get_index_data(ticker, start_date, end_date, interval='1m')
 
 
-def fetch_index_data(tickers: list, max_workers: int = 5) -> list:
+def fetch_index_data(tickers: list, max_workers: int = 1) -> list:
     """
     与えられた指標のリストに対して、並列でデータを取得する。
 
@@ -129,7 +129,7 @@ def fetch_index_data(tickers: list, max_workers: int = 5) -> list:
     return index_data_results
 
 
-def get_index_data_from_list(max_workers: int = 5) -> dict:
+def get_index_data_from_list(max_workers: int = 1) -> dict:
     """
     経済指標のリストを取得し、データを取得する。
 
@@ -193,7 +193,7 @@ def process_index_data(hdfs_conn_id: str, hdfs_path: str):
     # Check if the temporary file was created and has content
     if os.path.exists(tmp_file_path) and os.path.getsize(tmp_file_path) > 0:
         # Load the temporary file to HDFS
-        hdfs_file_name = f"index_data_{start_date.strftime('%Y%m%d')}_{end_date.strftime('%Y%m%d')}.csv"
+        hdfs_file_name = f"data_{start_date.strftime('%Y%m%d')}_{end_date.strftime('%Y%m%d')}.csv"
         hdfs_file_path = f"{hdfs_path}/{hdfs_file_name}"
         try:
             hdfs_hook.load_file(
@@ -216,8 +216,8 @@ def process_index_data(hdfs_conn_id: str, hdfs_path: str):
 
 with DAG(
     dag_id="index_data_pipeline_prod",
-    schedule=None,
-    start_date=datetime.datetime(2023, 1, 1),
+    schedule="5 9 * * Mon",
+    start_date=datetime.datetime(2025, 4, 21),
     catchup=False,
     tags=["index_data", "prod"],
 ) as dag:
@@ -226,6 +226,6 @@ with DAG(
         python_callable=process_index_data,
         op_kwargs={
             "hdfs_conn_id": "webhdfs_default",
-            "hdfs_path": "/tmp/index_data", # HDFSのパスを適切に設定してください
+            "hdfs_path": "/data/lake/yfinance/index/value/main/minute", # HDFSのパスを適切に設定してください
         },
     )
