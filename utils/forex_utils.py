@@ -61,6 +61,7 @@ def fetch_forex_data(pairs: list = None, interval: str = '1h') -> dict:
 def process_forex_data(hdfs_conn_id: str, interval: str = '1h'):
     """
     為替データを取得し、HDFSに出力する
+    すべての為替ペアのデータを1つのCSVファイルにまとめて保存する
     
     Args:
         hdfs_conn_id (str): HDFS接続ID
@@ -76,16 +77,19 @@ def process_forex_data(hdfs_conn_id: str, interval: str = '1h'):
     base_hdfs_path = HDFS_PATHS["forex"]
     hdfs_path = f"{base_hdfs_path}/{interval}"
     
-    # 各為替ペアのデータをHDFSに書き込む
+    # すべての為替ペアのデータを結合
+    combined_data = pd.DataFrame()
+    
     for pair, data in forex_data.items():
         if data is None or data.empty:
             print(f"No data to process for {pair}")
             continue
-        
-        # 為替ペアごとのディレクトリを作成
-        # シンボル名に含まれる特殊文字を置換
-        pair_name = pair.replace('=', '_')
-        pair_path = f"{hdfs_path}/{pair_name}"
-        
-        # データをHDFSに書き込む
-        write_to_hdfs(data, hdfs_hook, pair_path)
+            
+        # データをコピーして結合用のデータフレームに追加
+        combined_data = pd.concat([combined_data, data])
+    
+    # 結合したデータがある場合、HDFSに書き込む
+    if not combined_data.empty:
+        write_to_hdfs(combined_data, hdfs_hook, hdfs_path)
+    else:
+        print("No forex data to write to HDFS")

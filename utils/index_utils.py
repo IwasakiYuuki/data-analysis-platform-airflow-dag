@@ -61,6 +61,7 @@ def fetch_index_data(symbols: list = None, interval: str = '1d') -> dict:
 def process_index_data(hdfs_conn_id: str, interval: str = '1d'):
     """
     指数データを取得し、HDFSに出力する
+    すべての指数のデータを1つのCSVファイルにまとめて保存する
     
     Args:
         hdfs_conn_id (str): HDFS接続ID
@@ -76,15 +77,19 @@ def process_index_data(hdfs_conn_id: str, interval: str = '1d'):
     base_hdfs_path = HDFS_PATHS["index"]
     hdfs_path = f"{base_hdfs_path}/{interval}"
     
-    # 各指数のデータをHDFSに書き込む
+    # すべての指数データを結合
+    combined_data = pd.DataFrame()
+    
     for symbol, data in index_data.items():
         if data is None or data.empty:
             print(f"No data to process for {symbol}")
             continue
         
-        # 指数名に含まれる特殊文字を置換
-        symbol_name = symbol.replace('^', '')
-        symbol_path = f"{hdfs_path}/{symbol_name}"
-        
-        # データをHDFSに書き込む
-        write_to_hdfs(data, hdfs_hook, symbol_path)
+        # データをコピーして結合用のデータフレームに追加
+        combined_data = pd.concat([combined_data, data])
+    
+    # 結合したデータがある場合、HDFSに書き込む
+    if not combined_data.empty:
+        write_to_hdfs(combined_data, hdfs_hook, hdfs_path)
+    else:
+        print("No index data to write to HDFS")
