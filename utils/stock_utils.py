@@ -95,6 +95,7 @@ def get_stock_data_from_list(market: str = "prime", interval: str = '1m') -> dic
 def process_stock_data(hdfs_conn_id: str, market: str = "prime", interval: str = '1m'):
     """
     株価データを取得し、HDFSに日ごとにパーティション化して出力する
+    すべての銘柄のデータを1つのCSVファイルにまとめて保存する
     
     Args:
         hdfs_conn_id (str): HDFS接続ID
@@ -111,14 +112,19 @@ def process_stock_data(hdfs_conn_id: str, market: str = "prime", interval: str =
     base_hdfs_path = HDFS_PATHS["stock"].get(market, HDFS_PATHS["stock"]["prime"])
     hdfs_path = f"{base_hdfs_path}/{interval}"
     
-    # 各銘柄のデータをHDFSに書き込む
+    # すべての銘柄データを結合
+    combined_data = pd.DataFrame()
+    
     for ticker, data in stock_data.items():
         if data is None or data.empty:
             print(f"No data to process for {ticker}")
             continue
         
-        # 銘柄ごとのディレクトリを作成
-        ticker_path = f"{hdfs_path}/{ticker}"
-        
-        # データをHDFSに書き込む
-        write_to_hdfs(data, hdfs_hook, ticker_path)
+        # データをコピーして結合用のデータフレームに追加
+        combined_data = pd.concat([combined_data, data])
+    
+    # 結合したデータがある場合、HDFSに書き込む
+    if not combined_data.empty:
+        write_to_hdfs(combined_data, hdfs_hook, hdfs_path)
+    else:
+        print(f"No stock data to write to HDFS for market: {market}")

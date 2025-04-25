@@ -61,6 +61,7 @@ def write_to_hdfs(data: pd.DataFrame, hdfs_hook: WebHDFSHook, hdfs_path: str,
                   partition_cols: list = None, overwrite: bool = True):
     """
     データをHDFSに書き込む。日付でパーティション化する。
+    すべての銘柄のデータを一つのファイルに統合する。
 
     Args:
         data (pd.DataFrame): 書き込むデータ
@@ -87,22 +88,67 @@ def write_to_hdfs(data: pd.DataFrame, hdfs_hook: WebHDFSHook, hdfs_path: str,
     
     # パーティションごとにデータを分割して書き込み
     if 'Date' in partition_cols:
+        # 日付ごとにグループ化
         grouped_data = data.groupby('Date')
         for date, daily_data in grouped_data:
+            # 基本パスから日付パーティションパスを構築
+            base_dir = hdfs_path.split("/")[:-1]  # "/<SYMBOL>" 部分を削除
+            base_path = "/".join(base_dir)
+            
+            # HDFSのパスを構築 - 銘柄フォルダを削除し、日付パーティションのみに
+            hdfs_file_path = f"{base_path}/year={date.year}/month={date.month:02d}/day={date.day:02d}/data.csv"
+            
             # 一時ファイルに書き込む
             with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix=".csv") as tmp_file:
                 daily_data.to_csv(tmp_file, index=True)
                 tmp_file_path = tmp_file.name
-
-            # HDFSのパスを構築
-            hdfs_file_path = f"{hdfs_path}/year={date.year}/month={date.month:02d}/day={date.day:02d}/data.csv"
             
             try:
-                hdfs_hook.load_file(
-                    source=tmp_file_path,
-                    destination=hdfs_file_path,
-                    overwrite=overwrite
-                )
+                # ファイルが存在するかチェック
+                try:
+                    file_exists = hdfs_hook.check_for_file(hdfs_file_path)
+                except:
+                    file_exists = False
+                
+                if file_exists and overwrite:
+                    # 既存ファイルを上書きする場合
+                    hdfs_hook.load_file(
+                        source=tmp_file_path,
+                        destination=hdfs_file_path,
+                        overwrite=True
+                    )
+                elif file_exists:
+                    # 既存ファイルに追記する場合 (まず一時的にダウンロード)
+                    local_tmp_existing = os.path.join(tempfile.gettempdir(), f"existing_data_{date}.csv")
+                    hdfs_hook.download(hdfs_file_path, local_tmp_existing)
+                    
+                    # 既存データと新しいデータを結合
+                    existing_data = pd.read_csv(local_tmp_existing)
+                    new_data = pd.read_csv(tmp_file_path)
+                    combined_data = pd.concat([existing_data, new_data])
+                    
+                    # 結合したデータを一時ファイルに書き込む
+                    combined_tmp = os.path.join(tempfile.gettempdir(), f"combined_data_{date}.csv")
+                    combined_data.to_csv(combined_tmp, index=False)
+                    
+                    # 結合したデータをHDFSに書き込む
+                    hdfs_hook.load_file(
+                        source=combined_tmp,
+                        destination=hdfs_file_path,
+                        overwrite=True
+                    )
+                    
+                    # 一時ファイル削除
+                    os.remove(local_tmp_existing)
+                    os.remove(combined_tmp)
+                else:
+                    # 新規ファイル作成
+                    hdfs_hook.load_file(
+                        source=tmp_file_path,
+                        destination=hdfs_file_path,
+                        overwrite=False
+                    )
+                    
                 print(f"Successfully wrote data to HDFS path: {hdfs_file_path}")
             except Exception as e:
                 print(f"Error writing data to HDFS: {e}")
@@ -110,21 +156,60 @@ def write_to_hdfs(data: pd.DataFrame, hdfs_hook: WebHDFSHook, hdfs_path: str,
                 # 一時ファイルを削除
                 os.remove(tmp_file_path)
     else:
+        # 日付パーティションを使用しない場合
         # 一時ファイルに書き込む
         with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix=".csv") as tmp_file:
             data.to_csv(tmp_file, index=True)
             tmp_file_path = tmp_file.name
 
         try:
+            # 基本パスから銘柄部分を削除
+            base_dir = hdfs_path.split("/")[:-1]
+            base_path = "/".join(base_dir)
+            
             # 現在の日付をパスに含める
             today = datetime.date.today()
-            hdfs_file_path = f"{hdfs_path}/year={today.year}/month={today.month:02d}/day={today.day:02d}/data.csv"
+            hdfs_file_path = f"{base_path}/year={today.year}/month={today.month:02d}/day={today.day:02d}/data.csv"
             
-            hdfs_hook.load_file(
-                source=tmp_file_path,
-                destination=hdfs_file_path,
-                overwrite=overwrite
-            )
+            # 同様にファイルの存在チェックと結合処理
+            try:
+                file_exists = hdfs_hook.check_for_file(hdfs_file_path)
+            except:
+                file_exists = False
+                
+            if file_exists and overwrite:
+                hdfs_hook.load_file(
+                    source=tmp_file_path,
+                    destination=hdfs_file_path,
+                    overwrite=True
+                )
+            elif file_exists:
+                # 既存ファイルに追記
+                local_tmp_existing = os.path.join(tempfile.gettempdir(), "existing_data.csv")
+                hdfs_hook.download(hdfs_file_path, local_tmp_existing)
+                
+                existing_data = pd.read_csv(local_tmp_existing)
+                new_data = pd.read_csv(tmp_file_path)
+                combined_data = pd.concat([existing_data, new_data])
+                
+                combined_tmp = os.path.join(tempfile.gettempdir(), "combined_data.csv")
+                combined_data.to_csv(combined_tmp, index=False)
+                
+                hdfs_hook.load_file(
+                    source=combined_tmp,
+                    destination=hdfs_file_path,
+                    overwrite=True
+                )
+                
+                os.remove(local_tmp_existing)
+                os.remove(combined_tmp)
+            else:
+                hdfs_hook.load_file(
+                    source=tmp_file_path,
+                    destination=hdfs_file_path,
+                    overwrite=False
+                )
+                
             print(f"Successfully wrote data to HDFS path: {hdfs_file_path}")
         except Exception as e:
             print(f"Error writing data to HDFS: {e}")

@@ -18,7 +18,7 @@ MACHINES = {
 HADOOP_RUN_DURATION_SEC = 7200  # 2 hours
 
 with DAG(
-    dag_id="hadoop_cluster_on_demand_simple",
+    dag_id="hadoop_cluster_on_demand",
     schedule="40 12 * * Mon",
     start_date=pendulum.datetime(2025, 4, 10),
     catchup=False,
